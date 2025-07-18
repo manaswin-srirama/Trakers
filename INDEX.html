@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expense Tracker with Charts</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-color: #f5f5f5;
+      --text-color: #000;
+      --box-color: #fff;
+      --item-bg: #eee;
+      --btn-bg: #28a745;
+    }
+
+    body.dark {
+      --bg-color: #121212;
+      --text-color: #fff;
+      --box-color: #1e1e1e;
+      --item-bg: #2c2c2c;
+      --btn-bg: #2e8b57;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 0;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 40px auto;
+      background: var(--box-color);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    .toggle-btn {
+      float: right;
+      background-color: #444;
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 15px;
+    }
+
+    input, select {
+      padding: 10px;
+      margin: 5px 0;
+      width: 100%;
+      display: block;
+    }
+
+    button {
+      padding: 10px;
+      background-color: var(--btn-bg);
+      color: white;
+      border: none;
+      width: 100%;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
+    }
+
+    li {
+      padding: 8px;
+      margin-top: 5px;
+      background: var(--item-bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    li button {
+      background: transparent;
+      border: none;
+      font-size: 16px;
+      color: red;
+      cursor: pointer;
+    }
+
+    canvas {
+      margin-top: 30px;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        margin: 20px;
+        padding: 15px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <button class="toggle-btn" onclick="toggleDarkMode()">🌗 Toggle Dark Mode</button>
+    <h1>Expense Tracker</h1>
+    <form id="expense-form">
+      <input type="text" id="name" placeholder="Expense Name" required />
+      <input type="number" id="amount" placeholder="Amount (₹)" required />
+      <select id="category" required>
+        <option value="" disabled selected>Select Category</option>
+        <option>Food</option>
+        <option>Travel</option>
+        <option>Entertainment</option>
+        <option>Bills</option>
+        <option>Other</option>
+      </select>
+      <button type="submit">Add Expense</button>
+    </form>
+    <ul id="expense-list"></ul>
+    <h3>Total: ₹<span id="total">0</span></h3>
+
+    <canvas id="pieChart" width="400" height="400"></canvas>
+  </div>
+
+  <script>
+    const form = document.getElementById('expense-form');
+    const nameInput = document.getElementById('name');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const list = document.getElementById('expense-list');
+    const totalDisplay = document.getElementById('total');
+    const ctx = document.getElementById('pieChart').getContext('2d');
+
+    let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+    let total = 0;
+    let chart;
+
+    function renderExpenses() {
+      list.innerHTML = '';
+      total = 0;
+
+      expenses.forEach((expense, index) => {
+        const item = document.createElement('li');
+        item.innerHTML = `
+          ${expense.name} - ₹${expense.amount.toFixed(2)} (${expense.category})
+          <button onclick="removeItem(${index})">❌</button>
+        `;
+        list.appendChild(item);
+        total += expense.amount;
+      });
+
+      updateTotal();
+      renderChart();
+    }
+
+    function updateTotal() {
+      totalDisplay.textContent = total.toFixed(2);
+    }
+
+    function saveExpenses() {
+      localStorage.setItem('expenses', JSON.stringify(expenses));
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const name = nameInput.value.trim();
+      const amount = parseFloat(amountInput.value);
+      const category = categoryInput.value;
+
+      if (!name || isNaN(amount) || amount <= 0 || !category) return;
+
+      expenses.push({ name, amount, category });
+      saveExpenses();
+      renderExpenses();
+
+      nameInput.value = '';
+      amountInput.value = '';
+      categoryInput.selectedIndex = 0;
+    });
+
+    function removeItem(index) {
+      expenses.splice(index, 1);
+      saveExpenses();
+      renderExpenses();
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark");
+    }
+
+    function renderChart() {
+      const categoryTotals = {};
+
+      expenses.forEach(expense => {
+        categoryTotals[expense.category] = (categoryTotals[expense.category] || 0) + expense.amount;
+      });
+
+      const labels = Object.keys(categoryTotals);
+      const data = Object.values(categoryTotals);
+
+      if (chart) chart.destroy();
+
+      chart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Expenses by Category',
+            data: data,
+            backgroundColor: [
+              '#ff6384',
+              '#36a2eb',
+              '#ffce56',
+              '#4bc0c0',
+              '#9966ff'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              labels: {
+                color: getComputedStyle(document.body).getPropertyValue('--text-color')
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Initial load
+    renderExpenses();
+  </script>
+</body>
+</html>
+
